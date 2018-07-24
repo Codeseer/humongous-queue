@@ -38,33 +38,32 @@ class MongoQueue {
   }
 
   async get(quantity: number) {
-    let checkout = uuidv4()
-    let now = new Date()
-    let updateOne = {
-      updateOne: {
-        filter: {
-          visible: {
-            $lte: now
+    let writes = []
+    let acks = []
+    for(let i = 0; i < quantity; i++) {
+      let ack = uuidv4()
+      let updateOne = {
+        updateOne: {
+          filter: {
+            visible: {
+              $lte: new Date()
+            },
+            deleted: null
           },
-          deleted: null
-        },
-        update: {
-          $inc : { tries : 1 },
-          $set: {
-            checkout,
-            ack: uuidv4(),
-            visible: this.nowPlusSecs(this.visibility)
+          update: {
+            $inc : { tries : 1 },
+            $set: {
+              ack,
+              visible: this.nowPlusSecs(this.visibility)
+            }
           }
         }
       }
-    }
-    let writes = []
-    for(let i = 0; i < quantity; i++) {
+      acks.push(ack)
       writes.push(updateOne)
     }
     await this.collection.bulkWrite(writes)
-    let msgs = await this.collection.find({checkout, deleted: null})
-
+    let msgs = await this.collection.find({ack: {$in: acks}, deleted: null})
     return msgs
   }
 
@@ -124,9 +123,30 @@ class MongoQueue {
   }
 
   async total() {
-    self.col.count(function(err, count) {
-      if (err) return callback(err)
-      callback(null, count)
-    })
+    return await this.collection.count()
+  }
+
+  async size() {
+    let query = {
+        deleted : null,
+        visible : { $lte : new Date() },
+    }
+    return await this.collection.count(query)
+  }
+
+  async inFlight() {
+    let query = {
+        ack     : { $exists : true },
+        visible : { $gt : new Date() },
+        deleted : null,
+    }
+    return await this.collection.count(query)
+  }
+
+  async done() {
+    let query = {
+        deleted : { $exists : true },
+    }
+    return await this.collection.count(query)
   }
 }
