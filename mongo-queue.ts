@@ -1,16 +1,18 @@
 import { Collection } from "mongodb";
-import uuidv4 from 'uuid/v4'
+import { v4 as uuidv4 } from 'uuid';
+
 interface Payload {
-  key: string;
+  key?: string;
+  [x: string]: any 
 }
 
 interface QueueOptions {
   visibility: Number,
   delay: Number|Date,
-  maxRetries: Number,
-  deadQueue: Collection
+  maxRetries?: Number,
+  deadQueue?: Collection
 }
-class MongoQueue {
+export class MongoQueue {
   private collection: Collection;
   private visibility: Number;
   private delay: Number | Date;
@@ -26,7 +28,7 @@ class MongoQueue {
   }
 
   private nowPlusSecs(secs) {
-    return (new Date(Date.now() + secs * 1000)).toISOString()
+    return new Date(Date.now() + secs * 1000)
   }
 
   private getVisibilityDate() {
@@ -62,8 +64,9 @@ class MongoQueue {
       acks.push(ack)
       writes.push(updateOne)
     }
+    console.log(JSON.stringify(writes))
     await this.collection.bulkWrite(writes)
-    let msgs = await this.collection.find({ack: {$in: acks}, deleted: null})
+    let msgs = await this.collection.find({ack: {$in: acks}, deleted: null}).toArray()
     return msgs
   }
 
