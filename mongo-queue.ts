@@ -12,6 +12,7 @@ interface QueueOptions {
   maxRetries?: Number,
   deadQueue?: Collection
 }
+
 export class MongoQueue {
   private collection: Collection;
   private visibility: Number;
@@ -31,11 +32,12 @@ export class MongoQueue {
     return new Date(Date.now() + secs * 1000)
   }
 
-  private getVisibilityDate() {
-    if(this.delay instanceof Date) {
-      return this.delay
+  private getVisibilityDate(delay?: Number|Date) {
+    delay = delay || this.delay
+    if(delay instanceof Date) {
+      return delay
     } else {
-      return this.nowPlusSecs(this.delay)
+      return this.nowPlusSecs(delay)
     }
   }
 
@@ -64,13 +66,12 @@ export class MongoQueue {
       acks.push(ack)
       writes.push(updateOne)
     }
-    console.log(JSON.stringify(writes))
     await this.collection.bulkWrite(writes)
     let msgs = await this.collection.find({ack: {$in: acks}, deleted: null}).toArray()
     return msgs
   }
 
-  async add(payload: Payload|Array<Payload>) {
+  async add(payload: Payload|Array<Payload>, delay?: Number | Date) {
     let payloads = new Array<Payload>().concat(payload)
     let writes = []
     if (payloads.length === 0) {
@@ -85,7 +86,7 @@ export class MongoQueue {
           },
           update: {
             $setOnInsert: {
-              visible  : this.getVisibilityDate(),
+              visible  : this.getVisibilityDate(delay),
               payload  : p,
               key: pKey
             }
